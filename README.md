@@ -155,30 +155,27 @@ Used by the Lambda functions in the private subnet to securely access:
 
 ```bash
 ├── upload-website
-│   ├── index.php
+│   ├── public/index.php
 │   ├── .env
-│   ├── nginx.conf
+│   ├── composer.json
 │
 ├── search-website
-│   ├── index.html
+│   ├── public/index.html
 │   ├── server.js
-│   ├── socket.js
+│   ├── package.json
+│   ├── .env
 │
 ├── lambda-create-face
 │   ├── handler.py
-│   └── requirements.txt
 │
 ├── lambda-check-face
 │   ├── handler.py
-│   └── requirements.txt
 │
 ├── database
 │   ├── init.sql
-│   └── schema.png
 │
 ├── docs
 │   ├── architecture-diagram.png
-│   └── README-assets.md
 │
 └── README.md
 ```

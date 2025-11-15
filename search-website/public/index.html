@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Face Search (S3 + Lambda + Socket.IO)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: #020617;
+      border-radius: 16px;
+      border: 1px solid rgba(148,163,184,.3);
+      padding: 20px 20px 16px;
+      box-shadow: 0 18px 40px rgba(0,0,0,.6);
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+    p {
+      margin: 0 0 16px;
+      font-size: 14px;
+      color: #94a3b8;
+    }
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-size: 14px;
+      color: #cbd5e1;
+    }
+    input[type="file"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,.4);
+      background: #020617;
+      color: #e5e7eb;
+    }
+    button {
+      margin-top: 16px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg,#22c55e,#16a34a);
+      color: #022c22;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover {
+      filter: brightness(1.05);
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .result {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #020617;
+      border: 1px solid rgba(148,163,184,.4);
+      font-size: 14px;
+      min-height: 20px;
+    }
+    .ok { color: #22c55e; }
+    .err { color: #ef4444; }
+    .preview {
+      margin-top: 12px;
+      display: none;
+    }
+    .preview img {
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(148,163,184,.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Search name by image</h1>
+    <p>
+      Upload a photo. It will be sent to your server, uploaded to S3, processed by Lambda,
+      and the result will come back in real-time via Socket.IO.
+    </p>
+
+    <form id="searchForm">
+      <label for="photo">Photo</label>
+      <input id="photo" name="photo" type="file" accept="image/*" required />
+      <button type="submit">Search</button>
+    </form>
+
+    <div class="preview" id="preview">
+      <img id="previewImg" alt="Preview">
+    </div>
+
+    <div class="status" id="status">Waiting for image…</div>
+    <div class="result" id="result"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    let socketId = null;
+    const form = document.getElementById('searchForm');
+    const fileInput = document.getElementById('photo');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const preview = document.getElementById('preview');
+    const previewImg = document.getElementById('previewImg');
+
+    // Get socketId from server
+    socket.on('socketId', (id) => {
+      socketId = id;
+      statusEl.textContent = 'Ready. Socket ID: ' + id;
+    });
+
+    // Result coming from Lambda via Node
+    socket.on('searchResult', (data) => {
+      const people = data.people || [];
+      if (!people.length) {
+        resultEl.innerHTML = '<span class="err">No known people in this image.</span>';
+      } else {
+	resultEl.innerHTML =
+          '<span class="ok">People in this photo: ' +
+          people.map(p => `<strong>${p}</strong>`).join(', ') +
+          '</span>';
+      }
+      statusEl.textContent = 'Search complete.';
+    });
+
+    // Preview image locally
+   fileInput.addEventListener('change', () => {
+      const f = fileInput.files?.[0];
+      if (!f) {
+        preview.style.display = 'none';
+        return;
+      }
+      const url = URL.createObjectURL(f);
+      previewImg.src = url;
+      preview.style.display = 'block';
+    });
+
+    // Submit handler: POST to /search (Node uploads to S3, then Lambda, then back)
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!socketId) {
+        statusEl.textContent = 'No socketId yet, please wait…';
+        return;
+      }
+
+      const file = fileInput.files?.[0];
+      if (!file) {
+        statusEl.textContent = 'Please choose a file.';
+        return;
+      }
+
+      statusEl.textContent = 'Uploading image to server…';
+      resultEl.textContent = '';
+
+      const fd = new FormData();
+      fd.append('photo', file);
+      fd.append('socketId', socketId);
+
+      try {
+	const resp = await fetch('/search', {
+          method: 'POST',
+          body: fd,
+        });
+	if (!resp.ok) {
+          const t = await resp.text();
+          statusEl.textContent = 'Server error: ' + t;
+          return;
+        }
+
+        // We don't need the HTTP response content; just wait for the socket event
+        statusEl.textContent = 'Image uploaded. Waiting for recognition result…';
+      } catch (err) {
+        statusEl.textContent = 'Network error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

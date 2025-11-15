@@ -1,0 +1,9 @@
+{
+    "name": "myapp/webapp",
+    "description": "Face upload presign service",
+    "require": {
+        "php": ">=8.0",
+        "aws/aws-sdk-php": "^3.300",
+        "vlucas/phpdotenv": "^5.6"
+    }
+}
