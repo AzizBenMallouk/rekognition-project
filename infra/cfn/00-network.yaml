@@ -119,6 +119,21 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-node-sg"
 
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MySQL/MariaDB access
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0  # ⚠ pour la démo. En prod : restreindre !
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-sg"
+
+
 Outputs:
   VPCIdOut:
     Value: !Ref VPC
@@ -135,3 +150,8 @@ Outputs:
 
   NodeSecurityGroupIdOut:
     Value: !Ref NodeSecurityGroup
+
+  DbSecurityGroupIdOut:
+    Value: !Ref DbSecurityGroup
+    Description: "Security Group for DB EC2"
+

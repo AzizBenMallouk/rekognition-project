@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition Project - DB Server (MariaDB)
+
+Parameters:
+  ProjectName:
+    Type: String
+
+  Environment:
+    Type: String
+
+  VPCId:
+    Type: String
+
+  PublicSubnetId:
+    Type: String
+
+  DbSecurityGroupId:
+    Type: String
+
+  EC2KeyPairName:
+    Type: String
+
+  DbName:
+    Type: String
+    Default: rekognition_db
+
+  DbUser:
+    Type: String
+    Default: appuser
+
+  DbPassword:
+    Type: String
+    NoEcho: true
+
+Resources:
+  DatabaseEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: ami-0e86e20dae9224db8
+      KeyName: !Ref EC2KeyPairName
+      SubnetId: !Ref PublicSubnetId
+      SecurityGroupIds:
+        - !Ref DbSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+
+          yum update -y
+          yum install -y mariadb105-server
+          systemctl enable mariadb
+          systemctl start mariadb
+
+          mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DbPassword}'"
+          mysql -uroot -p'${DbPassword}' -e "CREATE DATABASE IF NOT EXISTS \`${DbName}\`"
+          mysql -uroot -p'${DbPassword}' -e "CREATE USER '${DbUser}'@'%' IDENTIFIED BY '${DbPassword}'"
+          mysql -uroot -p'${DbPassword}' -e "GRANT ALL PRIVILEGES ON \`${DbName}\`.* TO '${DbUser}'@'%'"
+          mysql -uroot -p'${DbPassword}' -e "FLUSH PRIVILEGES"
+
+          mysql -u'${DbUser}' -p'${DbPassword}' '${DbName}' <<'SQL'
+          CREATE TABLE IF NOT EXISTS uploads(
+            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            s3_bucket VARCHAR(255),
+            s3_key TEXT,
+            rekognition_faces JSON,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          SQL
+
+Outputs:
+  DatabasePublicIP:
+    Value: !GetAtt DatabaseEC2.PublicIp
+  DatabasePrivateIP:
+    Value: !GetAtt DatabaseEC2.PrivateIp

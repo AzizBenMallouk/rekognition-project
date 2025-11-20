@@ -4,20 +4,16 @@ set -euo pipefail
 # Usage:
 #   ./infra/scripts/destroy-all.sh
 #
-# Variables configurables :
+# Variables:
 #   PROJECT_NAME (default: rekognition-project)
 #   ENVIRONMENT  (default: dev)
-#
-# Prérequis :
-#   - infra/scripts/destroy-stack.sh doit exister et être exécutable
-#   - AWS_REGION doit être défini ou us-east-1 sera utilisé
+#   AWS_REGION   (default: us-east-1)
 
-REGION="${AWS_REGION:-us-east-1}"
 PROJECT_NAME="${PROJECT_NAME:-rekognition-project}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
+REGION="${AWS_REGION:-us-east-1}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-
 DESTROY_SCRIPT="$ROOT_DIR/infra/scripts/destroy-stack.sh"
 
 if [ ! -x "$DESTROY_SCRIPT" ]; then
@@ -25,23 +21,11 @@ if [ ! -x "$DESTROY_SCRIPT" ]; then
   exit 1
 fi
 
-echo "======================================"
-echo " Destroying all stacks for:"
-echo "   Project    : $PROJECT_NAME"
-echo "   Environment: $ENVIRONMENT"
-echo "   Region     : $REGION"
-echo "======================================"
-
 export AWS_REGION="$REGION"
 
-# Ordre inverse de création :
-# 1) EC2
-# 2) S3 events
-# 3) Lambdas
-# 4) Storage
-# 5) Network
-
-STACK_EC2="${PROJECT_NAME}-ec2-${ENVIRONMENT}"
+STACK_UPLOAD="${PROJECT_NAME}-upload-web-${ENVIRONMENT}"
+STACK_SEARCH="${PROJECT_NAME}-search-web-${ENVIRONMENT}"
+STACK_DB="${PROJECT_NAME}-database-${ENVIRONMENT}"
 STACK_S3_EVENTS="${PROJECT_NAME}-s3-events-${ENVIRONMENT}"
 STACK_LAMBDAS="${PROJECT_NAME}-lambdas-${ENVIRONMENT}"
 STACK_STORAGE="${PROJECT_NAME}-storage-${ENVIRONMENT}"
@@ -58,19 +42,33 @@ destroy_if_exists () {
   fi
 }
 
-echo "-> Destroy EC2 stack"
-destroy_if_exists "$STACK_EC2"
+echo "======================================"
+echo " Destroying all stacks for:"
+echo "   Project    : $PROJECT_NAME"
+echo "   Environment: $ENVIRONMENT"
+echo "   Region     : $REGION"
+echo "======================================"
+
+# Ordre inverse de création:
+echo "-> Destroy search-web stack"
+destroy_if_exists "$STACK_SEARCH"
+
+echo "-> Destroy upload-web stack"
+destroy_if_exists "$STACK_UPLOAD"
+
+echo "-> Destroy database stack"
+destroy_if_exists "$STACK_DB"
 
 echo "-> Destroy S3 events stack"
 destroy_if_exists "$STACK_S3_EVENTS"
 
-echo "-> Destroy Lambdas stack"
+echo "-> Destroy lambdas stack"
 destroy_if_exists "$STACK_LAMBDAS"
 
-echo "-> Destroy Storage stack"
+echo "-> Destroy storage stack"
 destroy_if_exists "$STACK_STORAGE"
 
-echo "-> Destroy Network stack"
+echo "-> Destroy network stack"
 destroy_if_exists "$STACK_NETWORK"
 
 echo "✅ All destroy requests sent (where stacks existed)."

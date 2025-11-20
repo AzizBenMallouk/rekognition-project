@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition Project - Upload Website (PHP + Nginx)
+
+Parameters:
+  ProjectName:
+    Type: String
+
+  Environment:
+    Type: String
+
+  VPCId:
+    Type: String
+
+  PublicSubnetId:
+    Type: String
+
+  WebSecurityGroupId:
+    Type: String
+
+  EC2KeyPairName:
+    Type: String
+
+  GitRepositoryUrl:
+    Type: String
+
+  BranchName:
+    Type: String
+    Default: main
+
+Resources:
+  UploadWebEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: ami-0e86e20dae9224db8
+      KeyName: !Ref EC2KeyPairName
+      SubnetId: !Ref PublicSubnetId
+      SecurityGroupIds:
+        - !Ref WebSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-upload-web"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+
+          yum update -y
+          yum install -y git
+
+          amazon-linux-extras enable php8.2
+          yum clean metadata
+          yum install -y php php-fpm php-json php-mbstring php-mysqlnd
+          yum install -y nginx
+
+          systemctl enable php-fpm
+          systemctl start php-fpm
+          systemctl enable nginx
+          systemctl start nginx
+
+          mkdir -p /var/www
+          cd /var/www
+          git clone ${GitRepositoryUrl} rekognition-project
+          cd rekognition-project
+          git checkout ${BranchName}
+
+          cd apps/upload-web
+          curl -sS https://getcomposer.org/installer | php
+          php composer.phar install --no-dev
+
+          cat >/etc/nginx/nginx.conf <<'EOF'
+          user nginx;
+          worker_processes auto;
+
+          error_log /var/log/nginx/error.log;
+          pid /run/nginx.pid;
+
+          events { worker_connections 1024; }
+
+          http {
+              include /etc/nginx/mime.types;
+              default_type application/octet-stream;
+              sendfile on;
+
+              server {
+                  listen 80;
+                  root /var/www/rekognition-project/apps/upload-web/public;
+                  index index.php index.html;
+
+                  location / {
+                      try_files $uri /index.php?$query_string;
+                  }
+
+                  location ~ \.php$ {
+                      fastcgi_pass unix:/run/php-fpm/www.sock;
+                      fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                      include fastcgi_params;
+                  }
+              }
+          }
+          EOF
+
+          systemctl restart nginx
+
+Outputs:
+  UploadWebPublicIP:
+    Value: !GetAtt UploadWebEC2.PublicIp
+  UploadWebInstanceId:
+    Value: !Ref UploadWebEC2

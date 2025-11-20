@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition Project - Search Website (Node + Socket.io)
+
+Parameters:
+  ProjectName:
+    Type: String
+
+  Environment:
+    Type: String
+
+  VPCId:
+    Type: String
+
+  PublicSubnetId:
+    Type: String
+
+  NodeSecurityGroupId:
+    Type: String
+
+  EC2KeyPairName:
+    Type: String
+
+  GitRepositoryUrl:
+    Type: String
+
+  BranchName:
+    Type: String
+    Default: main
+
+Resources:
+  SearchWebEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: ami-0e86e20dae9224db8
+      KeyName: !Ref EC2KeyPairName
+      SubnetId: !Ref PublicSubnetId
+      SecurityGroupIds:
+        - !Ref NodeSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-search-web"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+
+          yum update -y
+          yum install -y git
+
+          curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+          yum install -y nodejs
+
+          mkdir -p /var/www
+          cd /var/www
+          git clone ${GitRepositoryUrl} rekognition-project
+          cd rekognition-project
+          git checkout ${BranchName}
+
+          cd apps/search-web
+          npm install
+
+          cat >/etc/systemd/system/search-web.service <<'EOF'
+          [Unit]
+          Description=Search Web Node App
+          After=network.target
+
+          [Service]
+          WorkingDirectory=/var/www/rekognition-project/apps/search-web
+          ExecStart=/usr/bin/node server.js
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl enable search-web
+          systemctl start search-web
+
+Outputs:
+  SearchWebPublicIP:
+    Value: !GetAtt SearchWebEC2.PublicIp
+  SearchWebInstanceId:
+    Value: !Ref SearchWebEC2
