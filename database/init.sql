@@ -1,7 +1,0 @@
-CREATE TABLE uploads (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    s3_bucket VARCHAR(255) NOT NULL,
-    s3_key VARCHAR(500) NOT NULL,
-    rekognition_faces JSON NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);

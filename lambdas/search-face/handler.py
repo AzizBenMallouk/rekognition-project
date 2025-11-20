@@ -14,24 +14,25 @@ session = boto3.session.Session()
 AWS_REGION = os.getenv("AWS_REGION", session.region_name or "us-east-1")
 
 rek = boto3.client("rekognition", region_name=AWS_REGION)
-secrets = boto3.client("secretsmanager", region_name=AWS_REGION)
 
 COLLECTION_ID = os.environ["COLLECTION_ID"]
-SECRET_ARN = os.environ["SECRET_ARN"]
 TABLE_NAME = os.getenv("TABLE_NAME", "uploads")
-UI_NOTIFY_URL = os.environ["UI_NOTIFY_URL"]  # e.g. http://your-ec2:3000/lambda-result
+UI_NOTIFY_URL = os.environ["UI_NOTIFY_URL"]
+
+DB_HOST = os.environ["DB_HOST"]
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_USER = os.environ["DB_USER"]
+DB_PASS = os.environ["DB_PASS"]
+DB_NAME = os.environ["DB_NAME"]
 
 
 def _get_db_conn():
-    sec = secrets.get_secret_value(SecretId=SECRET_ARN)
-    cfg = json.loads(sec["SecretString"])
-
     conn = pymysql.connect(
-        host=cfg["host"],
-        port=int(cfg.get("port", 3306)),
-        user=cfg["username"],
-        password=cfg["password"],
-        database=cfg.get("dbname") or cfg.get("dbName") or "mysql",
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASS,
+        database=DB_NAME,
         connect_timeout=10,
         cursorclass=pymysql.cursors.DictCursor,
     )
@@ -98,7 +99,6 @@ def lambda_handler(event, context):
     if not records:
         return
 
-    # handle first record only for simplicity
     rec = records[0]
     s3_info = rec.get("s3", {})
     bucket = s3_info.get("bucket", {}).get("name")
@@ -111,7 +111,6 @@ def lambda_handler(event, context):
     key = unquote_plus(key)
     logger.info("Processing s3://%s/%s", bucket, key)
 
-    # key = search/<socketId>/filename
     parts = key.split("/")
     socket_id = parts[1] if len(parts) >= 3 else None
     if not socket_id:

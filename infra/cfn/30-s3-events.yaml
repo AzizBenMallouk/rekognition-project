@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition project - S3 events (S3 -> Lambdas)
+
+Parameters:
+  UploadBucketName:
+    Type: String
+    Description: "Name of upload bucket"
+  SearchBucketName:
+    Type: String
+    Description: "Name of search bucket"
+
+  IndexFaceFunctionArn:
+    Type: String
+    Description: "ARN of index-face Lambda"
+
+  SearchFaceFunctionArn:
+    Type: String
+    Description: "ARN of search-face Lambda"
+
+Resources:
+  # Permissions for S3 to invoke Lambdas
+  IndexFacePermissionForUploadBucket:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IndexFaceFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${UploadBucketName}"
+
+  SearchFacePermissionForSearchBucket:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SearchFaceFunctionArn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${SearchBucketName}"
+
+  # Bucket notifications (separate resource)
+  UploadBucketNotification:
+    Type: AWS::S3::BucketNotification
+    Properties:
+      Bucket: !Ref UploadBucketName
+      LambdaFunctionConfigurations:
+        - Event: "s3:ObjectCreated:*"
+          Function: !Ref IndexFaceFunctionArn
+
+  SearchBucketNotification:
+    Type: AWS::S3::BucketNotification
+    Properties:
+      Bucket: !Ref SearchBucketName
+      LambdaFunctionConfigurations:
+        - Event: "s3:ObjectCreated:*"
+          Function: !Ref SearchFaceFunctionArn

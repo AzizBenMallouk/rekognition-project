@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition project - S3 storage (upload & search)
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: rekognition-project
+
+  Environment:
+    Type: String
+    Default: dev
+
+  UploadBucketName:
+    Type: String
+    Default: ""
+    Description: "Optional: custom S3 bucket name for uploads (leave empty for auto-name)"
+
+  SearchBucketName:
+    Type: String
+    Default: ""
+    Description: "Optional: custom S3 bucket name for search (leave empty for auto-name)"
+
+Conditions:
+  UseCustomUploadBucket: !Not [!Equals [!Ref UploadBucketName, ""]]
+  UseCustomSearchBucket: !Not [!Equals [!Ref SearchBucketName, ""]]
+
+Resources:
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - UseCustomUploadBucket
+        - !Ref UploadBucketName
+        - !Sub "${ProjectName}-${Environment}-upload-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  SearchBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - UseCustomSearchBucket
+        - !Ref SearchBucketName
+        - !Sub "${ProjectName}-${Environment}-search-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Outputs:
+  UploadBucketNameOut:
+    Description: "Upload S3 bucket name"
+    Value: !Ref UploadBucket
+
+  UploadBucketArnOut:
+    Description: "Upload S3 bucket ARN"
+    Value: !GetAtt UploadBucket.Arn
+
+  SearchBucketNameOut:
+    Description: "Search S3 bucket name"
+    Value: !Ref SearchBucket
+
+  SearchBucketArnOut:
+    Description: "Search S3 bucket ARN"
+    Value: !GetAtt SearchBucket.Arn

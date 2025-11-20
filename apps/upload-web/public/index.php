@@ -11,7 +11,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Aws\S3\S3Client;
 
-// --- tiny .env loader (same as before) ----------------------
+// --- tiny .env loader ----------------------
 $envFile = __DIR__ . '/../.env';
 if (is_readable($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
@@ -33,6 +33,7 @@ function json_response(int $code, array $payload): void {
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $path   = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+
 // ---------- API endpoint: POST /upload-url ----------
 if ($method === 'POST' && $path === '/upload-url') {
     $raw = file_get_contents('php://input') ?: '';
@@ -43,8 +44,8 @@ if ($method === 'POST' && $path === '/upload-url') {
         json_response(400, ['error' => 'name is required']);
     }
 
-    $bucket	 = getenv('S3_BUCKET') ?: 'brief-s3-bucket';
-    $region	 = getenv('AWS_REGION') ?: 'us-east-1';
+    $bucket      = getenv('S3_BUCKET') ?: 'brief-s3-bucket';
+    $region      = getenv('AWS_REGION') ?: 'us-east-1';
     $contentType = getenv('UPLOAD_CONTENT_TYPE') ?: 'image/jpeg';
 
     if ($bucket === '') {
@@ -60,21 +61,20 @@ if ($method === 'POST' && $path === '/upload-url') {
     $key  = "uploads/{$slug}/{$rand}.jpg";
 
     try {
-	$cmd = $s3->getCommand('PutObject', [
-            'Bucket'	  => $bucket,
+        $cmd = $s3->getCommand('PutObject', [
+            'Bucket'      => $bucket,
             'Key'         => $key,
             'ContentType' => $contentType,
-            // IMPORTANT: include metadata in the signature; client must send the same header
             'Metadata'    => ['name' => $name],
         ]);
         $req = $s3->createPresignedRequest($cmd, '+5 minutes');
 
         json_response(200, [
             'uploadUrl'   => (string)$req->getUri(),
-            'bucket'	  => $bucket,
+            'bucket'      => $bucket,
             'key'         => $key,
             'contentType' => $contentType,
-            'metaHeader'  => 'x-amz-meta-name', // for the browser PUT
+            'metaHeader'  => 'x-amz-meta-name',
             'metaValue'   => $name
         ]);
     } catch (\Throwable $e) {
@@ -93,7 +93,17 @@ if ($method === 'POST' && $path === '/upload-url') {
   <style>
     :root { --bg:#0f172a; --card:#111827; --text:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --danger:#ef4444; }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background: linear-gradient(135deg,#0f172a,#1f2937); color:var(--text);>
+    body {
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(135deg,#0f172a,#1f2937);
+      color:var(--text);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      padding:16px;
+    }
     .card { width:100%; max-width:560px; background:rgba(17,24,39,.8); border:1px solid rgba(148,163,184,.15); border-radius:16px; padding:24px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
     h1 { margin:0 0 4px; font-size:22px; }
     p { margin:0 0 18px; color:var(--muted); }
@@ -177,7 +187,7 @@ form.addEventListener('submit', async (e) => {
   const name = nameInput.value.trim();
   if (!file) return setStatus('No file selected', 'err');
   if (!name) return setStatus('Name is required', 'err');
-  // 1) ask server for a pre-signed URL
+
   let resp;
   try {
     resp = await fetch('/upload-url', {
@@ -198,14 +208,12 @@ form.addEventListener('submit', async (e) => {
 
   const { uploadUrl, key, contentType, metaHeader, metaValue } = await resp.json();
 
-  // 2) PUT to S3 with same headers that were signed
   setStatus('Uploading to S3…');
   try {
     const put = await fetch(uploadUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': contentType,
-        // IMPORTANT: must match the metadata used during signing
         [metaHeader || 'x-amz-meta-name']: metaValue || name
       },
       body: file

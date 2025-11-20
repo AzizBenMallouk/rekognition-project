@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition project - Lambdas (index & search) + IAM
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: rekognition-project
+
+  Environment:
+    Type: String
+    Default: dev
+
+  # DB config (env vars)
+  DbHost:
+    Type: String
+    Description: MySQL host (RDS endpoint or EC2 IP)
+  DbPort:
+    Type: Number
+    Default: 3306
+  DbUser:
+    Type: String
+    NoEcho: true
+  DbPass:
+    Type: String
+    NoEcho: true
+  DbName:
+    Type: String
+    Default: rekognition_db
+
+  CollectionId:
+    Type: String
+    Default: rekognition-faces
+
+  UiNotifyUrl:
+    Type: String
+    Description: "URL of Node.js endpoint for Lambda results (e.g. http://your-ec2:3000/lambda-result)"
+
+  LambdaCodeBucket:
+    Type: String
+    Description: "S3 bucket where lambda zip files are stored"
+  IndexFaceKey:
+    Type: String
+    Default: lambda-index-face.zip
+  SearchFaceKey:
+    Type: String
+    Default: lambda-search-face.zip
+
+  # Bucket ARNs (from 10-storage outputs)
+  UploadBucketArn:
+    Type: String
+    Description: "ARN of upload bucket"
+  SearchBucketArn:
+    Type: String
+    Description: "ARN of search bucket"
+
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RekognitionS3AndLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rekognition:IndexFaces
+                  - rekognition:SearchFacesByImage
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub "${UploadBucketArn}/*"
+                  - !Sub "${SearchBucketArn}/*"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  IndexFaceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-${Environment}-index-face"
+      Runtime: python3.11
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref IndexFaceKey
+      Environment:
+        Variables:
+          AWS_REGION: !Ref "AWS::Region"
+          COLLECTION_ID: !Ref CollectionId
+          TABLE_NAME: "uploads"
+          DB_HOST: !Ref DbHost
+          DB_PORT: !Ref DbPort
+          DB_USER: !Ref DbUser
+          DB_PASS: !Ref DbPass
+          DB_NAME: !Ref DbName
+
+  SearchFaceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-${Environment}-search-face"
+      Runtime: python3.11
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref SearchFaceKey
+      Environment:
+        Variables:
+          AWS_REGION: !Ref "AWS::Region"
+          COLLECTION_ID: !Ref CollectionId
+          TABLE_NAME: "uploads"
+          UI_NOTIFY_URL: !Ref UiNotifyUrl
+          DB_HOST: !Ref DbHost
+          DB_PORT: !Ref DbPort
+          DB_USER: !Ref DbUser
+          DB_PASS: !Ref DbPass
+          DB_NAME: !Ref DbName
+
+Outputs:
+  IndexFaceFunctionArnOut:
+    Description: "ARN of index-face Lambda"
+    Value: !GetAtt IndexFaceFunction.Arn
+
+  SearchFaceFunctionArnOut:
+    Description: "ARN of search-face Lambda"
+    Value: !GetAtt SearchFaceFunction.Arn

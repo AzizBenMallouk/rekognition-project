@@ -7,50 +7,31 @@ from urllib.parse import unquote_plus
 import boto3
 import pymysql
 
-# -------- Configuration via Env Vars --------
-# REQUIRED:
-#   COLLECTION_ID
-#   SECRET_ARN
-# OPTIONAL:
-#   TABLE_NAME (default: "users")
-#   AWS_REGION (defaults to Lambda's region)
-
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 session = boto3.session.Session()
 AWS_REGION = os.getenv("AWS_REGION", session.region_name or "us-east-1")
 
-secrets = boto3.client("secretsmanager", region_name=AWS_REGION)
 rek = boto3.client("rekognition", region_name=AWS_REGION)
 
 COLLECTION_ID = os.environ["COLLECTION_ID"]
-SECRET_ARN = os.environ["SECRET_ARN"]
 TABLE_NAME = os.getenv("TABLE_NAME", "uploads")
+
+DB_HOST = os.environ["DB_HOST"]
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_USER = os.environ["DB_USER"]
+DB_PASS = os.environ["DB_PASS"]
+DB_NAME = os.environ["DB_NAME"]
 
 
 def _get_db_conn():
-    """
-    Fetch DB creds from Secrets Manager and open a PyMySQL connection.
-    Expected secret JSON like:
-    {
-      "host": "10.0.2.75",
-      "port": 3306,
-      "username": "appuser",
-      "password": "StrongPassHere",
-      "engine": "mysql",
-      "dbname": "myapp_db"
-    }
-    """
-    sec = secrets.get_secret_value(SecretId=SECRET_ARN)
-    cfg = json.loads(sec["SecretString"])
-
     conn = pymysql.connect(
-        host=cfg["host"],
-        port=int(cfg.get("port", 3306)),
-        user=cfg["username"],
-        password=cfg["password"],
-        database=cfg.get("dbname") or cfg.get("dbName") or "mysql",
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASS,
+        database=DB_NAME,
         connect_timeout=10,
         cursorclass=pymysql.cursors.DictCursor,
     )
@@ -58,9 +39,6 @@ def _get_db_conn():
 
 
 def _ensure_table(conn):
-    """
-    Create a simple table if not present. Adjust to your schema as needed.
-    """
     create_sql = f"""
     CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -92,10 +70,6 @@ def _insert_row(conn, s3_bucket, s3_key, faces_json):
 
 
 def _index_faces(bucket: str, key: str):
-    """
-    Calls Rekognition IndexFaces on the collection using the S3 object.
-    Returns a summary dict with face IDs and details.
-    """
     external_id = key.split("/")[-1]
     resp = rek.index_faces(
         CollectionId=COLLECTION_ID,
@@ -123,12 +97,6 @@ def _index_faces(bucket: str, key: str):
 
 
 def lambda_handler(event, context):
-    """
-    S3 ObjectCreated trigger:
-    - for each record, run Rekognition index_faces
-    - log results
-    - write a row to MySQL with S3 info + Rekognition output
-    """
     logger.info("Received event:\n%s", json.dumps(event, indent=2))
 
     records = event.get("Records", [])
@@ -139,7 +107,6 @@ def lambda_handler(event, context):
     conn = None
     try:
         conn = _get_db_conn()
-        # Ensure table exists (enable once, then you can comment it out)
         _ensure_table(conn)
 
         processed = []

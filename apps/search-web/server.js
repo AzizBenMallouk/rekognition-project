@@ -12,7 +12,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-// Multer for in-memory file upload
 const upload = multer({ storage: multer.memoryStorage() });
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -20,27 +19,23 @@ AWS.config.update({ region });
 
 const s3 = new AWS.S3();
 
-const SEARCH_BUCKET = 'brief-s3-bucket-seach';
+const SEARCH_BUCKET = process.env.SEARCH_BUCKET; // <-- plus de valeur hardcodée
 
 if (!SEARCH_BUCKET) {
-  console.warn('WARNING: SEARCH_BUCKET is not set in .env');
+  console.warn('WARNING: SEARCH_BUCKET is not set in env');
 }
 
-// Serve static files (frontend) from ./public
 app.use(express.static('public'));
 app.use(bodyParser.json());
 
-// Socket.IO: when client connects, send them their socketId
+// Socket.IO
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   socket.emit('socketId', socket.id);
 });
+
 /**
- * Browser -> POST /search (multipart/form-data: photo + socketId)
- * Node    -> uploads to S3 at search/<socketId>/<random>.jpg
- * S3	   -> triggers Lambda (S3 event)
- * Lambda  -> POST /lambda-result
- * Node    -> emits "searchResult" via Socket.IO
+ * POST /search (multipart/form-data: photo + socketId)
  */
 app.post('/search', upload.single('photo'), async (req, res) => {
   try {
@@ -69,7 +64,6 @@ app.post('/search', upload.single('photo'), async (req, res) => {
 
     console.log(`Uploaded to s3://${SEARCH_BUCKET}/${key}`);
 
-    // We don't call Lambda here. S3 event will trigger your Lambda.
     return res.json({ status: 'uploaded', key });
   } catch (err) {
     console.error('Error in /search:', err);
@@ -82,8 +76,7 @@ app.post('/search', upload.single('photo'), async (req, res) => {
 });
 
 /**
- * Lambda -> POST /lambda-result with JSON body: { socketId, people }
- * Node   -> emits "searchResult" to that specific socket
+ * Lambda -> POST /lambda-result
  */
 app.post('/lambda-result', (req, res) => {
   const { socketId, people } = req.body || {};
