@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Rekognition project - Lambdas (index & search) + Rekognition Collection + IAM
+Description: Rekognition project - Lambdas (index & search) + Rekognition Collection + IAM + VPC config
 
 Parameters:
   ProjectName:
@@ -10,10 +10,10 @@ Parameters:
     Type: String
     Default: dev
 
-  # --- DB configuration for Lambdas (no Secrets Manager) ---
+  # --- DB configuration for Lambdas ---
   DbHost:
     Type: String
-    Description: MySQL host (RDS endpoint or EC2 private IP)
+    Description: "MySQL host (private IP of DB EC2 or RDS endpoint)"
 
   DbPort:
     Type: Number
@@ -63,6 +63,15 @@ Parameters:
     Type: String
     Description: "ARN of search bucket (face search images)"
 
+  # --- VPC config for Lambdas ---
+  LambdaSubnetId:
+    Type: String
+    Description: "Subnet for Lambda ENIs (typically the private subnet)"
+
+  LambdaSecurityGroupId:
+    Type: String
+    Description: "Security group for Lambdas (must allow outbound to DB SG)"
+
 Resources:
   # ---------------------------
   # Rekognition Collection
@@ -87,8 +96,10 @@ Resources:
             Action: sts:AssumeRole
 
       ManagedPolicyArns:
-        # Basic logs, etc.
+        # Logs, basic Lambda
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        # Required for Lambdas in VPC (ENI management)
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
 
       Policies:
         - PolicyName: RekognitionAndS3Access
@@ -105,7 +116,7 @@ Resources:
                   - rekognition:DescribeCollection
                 Resource: !Sub "arn:aws:rekognition:${AWS::Region}:${AWS::AccountId}:collection/${CollectionId}"
 
-              # CreateCollection only once if not existing
+              # CreateCollection if it doesn't exist yet
               - Effect: Allow
                 Action:
                   - rekognition:CreateCollection
@@ -125,7 +136,7 @@ Resources:
 
   # ---------------------------
   # Lambda: index-face
-  # Trigger: S3 upload bucket (configured in 30-s3-events stack)
+  # Trigger from upload-bucket (wired in 30-s3-events)
   # ---------------------------
   IndexFaceFunction:
     Type: AWS::Lambda::Function
@@ -151,10 +162,15 @@ Resources:
           DB_USER: !Ref DbUser
           DB_PASS: !Ref DbPass
           DB_NAME: !Ref DbName
+      VpcConfig:
+        SubnetIds:
+          - !Ref LambdaSubnetId
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
 
   # ---------------------------
   # Lambda: search-face
-  # Trigger: S3 search bucket (configured in 30-s3-events stack)
+  # Trigger from search-bucket (wired in 30-s3-events)
   # ---------------------------
   SearchFaceFunction:
     Type: AWS::Lambda::Function
@@ -181,6 +197,11 @@ Resources:
           DB_USER: !Ref DbUser
           DB_PASS: !Ref DbPass
           DB_NAME: !Ref DbName
+      VpcConfig:
+        SubnetIds:
+          - !Ref LambdaSubnetId
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroupId
 
 Outputs:
   IndexFaceFunctionArnOut:

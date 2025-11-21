@@ -14,7 +14,7 @@ set -euo pipefail
 #   DB_PASS (default: SuperSecret123!)
 #   GIT_REPO_URL (default: ton repo GitHub)
 #   BRANCH_NAME (default: main)
-#   EC2_KEYPAIR_NAME (default: brief1-db-key.pem)
+#   EC2_KEYPAIR_NAME (OBLIGATOIRE: le nom de ta keypair EC2)
 
 PROJECT_NAME="${PROJECT_NAME:-rekognition-project}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
@@ -73,15 +73,19 @@ NETWORK_OUTPUTS=$(aws cloudformation describe-stacks \
 
 VPC_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="VPCIdOut") | .OutputValue')
 PUBLIC_SUBNET_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="PublicSubnetIdOut") | .OutputValue')
+PRIVATE_SUBNET_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="PrivateSubnetIdOut") | .OutputValue')
 WEB_SG_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="WebSecurityGroupIdOut") | .OutputValue')
 NODE_SG_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="NodeSecurityGroupIdOut") | .OutputValue')
 DB_SG_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DbSecurityGroupIdOut") | .OutputValue')
+LAMBDA_SG_ID=$(echo "$NETWORK_OUTPUTS" | jq -r '.[] | select(.OutputKey=="LambdaSecurityGroupIdOut") | .OutputValue')
 
-echo "VPC_ID          = $VPC_ID"
-echo "PUBLIC_SUBNET   = $PUBLIC_SUBNET_ID"
-echo "WEB_SG_ID       = $WEB_SG_ID"
-echo "NODE_SG_ID      = $NODE_SG_ID"
-echo "DB_SG_ID        = $DB_SG_ID"
+echo "VPC_ID            = $VPC_ID"
+echo "PUBLIC_SUBNET_ID  = $PUBLIC_SUBNET_ID"
+echo "PRIVATE_SUBNET_ID = $PRIVATE_SUBNET_ID"
+echo "WEB_SG_ID         = $WEB_SG_ID"
+echo "NODE_SG_ID        = $NODE_SG_ID"
+echo "DB_SG_ID          = $DB_SG_ID"
+echo "LAMBDA_SG_ID      = $LAMBDA_SG_ID"
 
 # 2) Storage
 echo "======================================"
@@ -160,7 +164,7 @@ SEARCH_OUTPUTS=$(aws cloudformation describe-stacks \
 SEARCH_WEB_PUBLIC_IP=$(echo "$SEARCH_OUTPUTS" | jq -r '.[] | select(.OutputKey=="SearchWebPublicIP") | .OutputValue')
 echo "Search Web Public IP = $SEARCH_WEB_PUBLIC_IP"
 
-# 5) Database EC2
+# 5) Database EC2 (private subnet)
 echo "======================================"
 echo " Deploying 42-database"
 echo "======================================"
@@ -170,7 +174,7 @@ echo "======================================"
   ProjectName="$PROJECT_NAME" \
   Environment="$ENVIRONMENT" \
   VPCId="$VPC_ID" \
-  PublicSubnetId="$PUBLIC_SUBNET_ID" \
+  PrivateSubnetId="$PRIVATE_SUBNET_ID" \
   DbSecurityGroupId="$DB_SG_ID" \
   EC2KeyPairName="$EC2_KEYPAIR_NAME" \
   DbName="$DB_NAME" \
@@ -185,15 +189,12 @@ DB_OUTPUTS=$(aws cloudformation describe-stacks \
   --output json)
 
 DB_PRIVATE_IP=$(echo "$DB_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DatabasePrivateIP") | .OutputValue')
-DB_PUBLIC_IP=$(echo "$DB_OUTPUTS" | jq -r '.[] | select(.OutputKey=="DatabasePublicIP") | .OutputValue')
-
 echo "DB Private IP = $DB_PRIVATE_IP"
-echo "DB Public  IP = $DB_PUBLIC_IP"
 
 UI_NOTIFY_URL="http://${SEARCH_WEB_PUBLIC_IP}:3000/lambda-result"
 echo "UI_NOTIFY_URL = $UI_NOTIFY_URL"
 
-# 6) Lambdas
+# 6) Lambdas (in VPC)
 echo "======================================"
 echo " Deploying 20-lambdas"
 echo "======================================"
@@ -213,7 +214,9 @@ echo "======================================"
   IndexFaceKey="lambda-index-face.zip" \
   SearchFaceKey="lambda-search-face.zip" \
   UploadBucketArn="$UPLOAD_BUCKET_ARN" \
-  SearchBucketArn="$SEARCH_BUCKET_ARN"
+  SearchBucketArn="$SEARCH_BUCKET_ARN" \
+  LambdaSubnetId="$PRIVATE_SUBNET_ID" \
+  LambdaSecurityGroupId="$LAMBDA_SG_ID"
 
 LAMBDA_STACK="${PROJECT_NAME}-lambdas-${ENVIRONMENT}"
 LAMBDA_OUTPUTS=$(aws cloudformation describe-stacks \
@@ -244,5 +247,5 @@ echo "======================================"
 echo " ✅ All stacks deployed successfully."
 echo " Upload Web  : http://$UPLOAD_WEB_PUBLIC_IP/"
 echo " Search Web  : http://$SEARCH_WEB_PUBLIC_IP:3000/"
-echo " DB (public) : $DB_PUBLIC_IP"
+echo " DB (private): $DB_PRIVATE_IP"
 echo "======================================"

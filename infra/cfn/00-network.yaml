@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Rekognition Project - Network Layer (VPC, Subnets, SG, NAT)
+Description: Rekognition Project - Network Layer (VPC, Subnets, NAT, SG)
 
 Parameters:
   ProjectName:
@@ -37,7 +37,7 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
 
   # ---------------------------
-  # Subnets (same AZ)
+  # Subnets (same AZ for public + private)
   # ---------------------------
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -55,7 +55,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]   # same AZ as PublicSubnet
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]   # même AZ que public
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-private-subnet"
@@ -122,6 +122,8 @@ Resources:
   # ---------------------------
   # Security Groups
   # ---------------------------
+
+  # EC2 Upload Web (Nginx/PHP)
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -142,6 +144,7 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-web-sg"
 
+  # EC2 Search Web (Node/Socket.io)
   NodeSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -157,16 +160,31 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-node-sg"
 
+  # SG pour Lambdas en VPC (sortie vers DB, S3 via VPC + NAT)
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId: !Ref VPC
+      # pas d'ingress -> les Lambdas initient les connexions
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-lambda-sg"
+
+  # DB EC2 : n'accepte que les connexions venant des Lambdas (port 3306)
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow MySQL/MariaDB access
+      GroupDescription: Allow MySQL/MariaDB access from Lambdas
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 0.0.0.0/0   # ⚠ demo only. In prod, restrict to app SGs/VPC.
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-db-sg"
@@ -190,4 +208,8 @@ Outputs:
 
   DbSecurityGroupIdOut:
     Value: !Ref DbSecurityGroup
-    Description: "Security Group for DB EC2"
+    Description: "Security Group for DB EC2 (in private subnet)"
+
+  LambdaSecurityGroupIdOut:
+    Value: !Ref LambdaSecurityGroup
+    Description: "Security Group for Lambdas in VPC"
