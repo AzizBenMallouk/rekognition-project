@@ -31,12 +31,12 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           printf "Host *\n  StrictHostKeyChecking no\n" > ~/.ssh/config
 
-      - name: Deploy infra (CloudFormation)
-        run: |
-          chmod +x infra/scripts/deploy-all.sh
-          chmod +x infra/scripts/deploy-stack.sh
-          chmod +x infra/scripts/package-lambdas.sh
-          ./infra/scripts/deploy-all.sh
+#      - name: Deploy infra (CloudFormation)
+#        run: |
+#          chmod +x infra/scripts/deploy-all.sh
+#          chmod +x infra/scripts/deploy-stack.sh
+#          chmod +x infra/scripts/package-lambdas.sh
+#          ./infra/scripts/deploy-all.sh
 
       - name: Get EC2 IPs from CloudFormation
         id: get_ips

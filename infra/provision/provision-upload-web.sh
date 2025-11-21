@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 # Usage:
 #   ./infra/provision/provision-upload-web.sh ec2-user@PUBLIC_IP
@@ -74,14 +74,14 @@ http {
         index index.php index.html;
 
         location / {
-            try_files $uri /index.php?$query_string;
+            try_files \$uri /index.php?\$query_string;
         }
 
         location ~ \.php$ {
             fastcgi_pass unix:/run/php-fpm/www.sock;
             fastcgi_index index.php;
             include fastcgi_params;
-            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         }
     }
 }
