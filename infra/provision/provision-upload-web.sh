@@ -15,7 +15,7 @@ echo "=== [upload-web] System update ==="
 sudo dnf update -y
 
 echo "=== [upload-web] Install packages ==="
-sudo dnf install -y git nginx php-cli php-fpm php-json php-mbstring php-mysqlnd
+sudo dnf install -y git nginx php-cli php-fpm php-json php-mbstring php-mysqlnd php-xml
 
 sudo systemctl enable php-fpm
 sudo systemctl start php-fpm
