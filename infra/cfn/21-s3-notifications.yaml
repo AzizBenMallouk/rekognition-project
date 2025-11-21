@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Rekognition Project - Configure S3 -> Lambda notifications via Custom Resource
+
+Parameters:
+  UploadBucketName:
+    Type: String
+    Description: "Name of the upload S3 bucket"
+
+  SearchBucketName:
+    Type: String
+    Description: "Name of the search S3 bucket"
+
+  IndexFaceFunctionArn:
+    Type: String
+    Description: "ARN of index-face Lambda"
+
+  SearchFaceFunctionArn:
+    Type: String
+    Description: "ARN of search-face Lambda"
+
+Resources:
+  # -------------------------------------------------
+  # Lambda permissions: allow S3 to invoke lambdas
+  # -------------------------------------------------
+  UploadBucketInvokeIndexLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref IndexFaceFunctionArn
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${UploadBucketName}"
+
+  SearchBucketInvokeSearchLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SearchFaceFunctionArn
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${SearchBucketName}"
+
+  # -------------------------------------------------
+  # Role for the custom Lambda that configures notifications
+  # -------------------------------------------------
+  NotificationConfiguratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationConfigPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketNotificationConfiguration
+                  - s3:GetBucketNotificationConfiguration
+                Resource:
+                  - !Sub "arn:aws:s3:::${UploadBucketName}"
+                  - !Sub "arn:aws:s3:::${SearchBucketName}"
+
+  # -------------------------------------------------
+  # Custom Lambda: configure bucket notifications
+  # -------------------------------------------------
+  NotificationConfiguratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt NotificationConfiguratorRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import urllib.request
+          import traceback
+
+          s3 = boto3.client("s3")
+
+          def send_response(event, context, status, data, reason=None):
+              response_url = event["ResponseURL"]
+              response_body = {
+                  "Status": status,
+                  "Reason": reason or f"See CloudWatch Logs for details: {context.log_stream_name}",
+                  "PhysicalResourceId": context.log_stream_name,
+                  "StackId": event["StackId"],
+                  "RequestId": event["RequestId"],
+                  "LogicalResourceId": event["LogicalResourceId"],
+                  "Data": data or {},
+              }
+              json_body = json.dumps(response_body).encode("utf-8")
+              req = urllib.request.Request(
+                  response_url,
+                  data=json_body,
+                  headers={"content-type": "", "content-length": str(len(json_body))},
+                  method="PUT",
+              )
+              with urllib.request.urlopen(req) as resp:
+                  resp.read()
+
+          def handler(event, context):
+              print("Event:", json.dumps(event))
+              props = event.get("ResourceProperties", {})
+              request_type = event.get("RequestType")
+
+              upload_bucket = props.get("UploadBucketName")
+              search_bucket = props.get("SearchBucketName")
+              index_arn = props.get("IndexFaceFunctionArn")
+              search_arn = props.get("SearchFaceFunctionArn")
+
+              try:
+                  if request_type in ("Create", "Update"):
+                      # Configure upload bucket -> index-face Lambda
+                      if upload_bucket and index_arn:
+                          s3.put_bucket_notification_configuration(
+                              Bucket=upload_bucket,
+                              NotificationConfiguration={
+                                  "LambdaFunctionConfigurations": [
+                                      {
+                                          "Id": "UploadIndexFaces",
+                                          "LambdaFunctionArn": index_arn,
+                                          "Events": ["s3:ObjectCreated:*"],
+                                      }
+                                  ]
+                              },
+                          )
+
+                      # Configure search bucket -> search-face Lambda
+                      if search_bucket and search_arn:
+                          s3.put_bucket_notification_configuration(
+                              Bucket=search_bucket,
+                              NotificationConfiguration={
+                                  "LambdaFunctionConfigurations": [
+                                      {
+                                          "Id": "SearchFaces",
+                                          "LambdaFunctionArn": search_arn,
+                                          "Events": ["s3:ObjectCreated:*"],
+                                      }
+                                  ]
+                              },
+                          )
+
+                      send_response(event, context, "SUCCESS", {"Message": "Notifications configured"})
+                  elif request_type == "Delete":
+                      # Optionnel: on peut nettoyer les notifications ou juste SUCCESS
+                      send_response(event, context, "SUCCESS", {"Message": "Delete - no action"})
+                  else:
+                      send_response(event, context, "FAILED", {}, reason=f"Unknown RequestType {request_type}")
+              except Exception as e:
+                  traceback.print_exc()
+                  send_response(event, context, "FAILED", {}, reason=str(e))
+
+  # -------------------------------------------------
+  # Custom Resource
+  # -------------------------------------------------
+  S3BucketNotifications:
+    Type: Custom::S3BucketNotifications
+    Properties:
+      ServiceToken: !GetAtt NotificationConfiguratorFunction.Arn
+      UploadBucketName: !Ref UploadBucketName
+      SearchBucketName: !Ref SearchBucketName
+      IndexFaceFunctionArn: !Ref IndexFaceFunctionArn
+      SearchFaceFunctionArn: !Ref SearchFaceFunctionArn
+
+Outputs:
+  NotificationsConfigured:
+    Description: "Indicates that S3 -> Lambda notifications have been configured"
+    Value: "true"

@@ -233,11 +233,11 @@ echo "Search Lambda ARN = $SEARCH_LAMBDA_ARN"
 
 # 7) S3 Events
 echo "======================================"
-echo " Deploying 30-s3-events"
+echo " Deploying 21-s3-notifications"
 echo "======================================"
 "$DEPLOY_SCRIPT" \
-  "${PROJECT_NAME}-s3-events-${ENVIRONMENT}" \
-  "$ROOT_DIR/infra/cfn/30-s3-events.yaml" \
+  "${PROJECT_NAME}-s3-notifications-${ENVIRONMENT}" \
+  "$ROOT_DIR/infra/cfn/21-s3-notifications.yaml" \
   UploadBucketName="$UPLOAD_BUCKET_NAME" \
   SearchBucketName="$SEARCH_BUCKET_NAME" \
   IndexFaceFunctionArn="$INDEX_LAMBDA_ARN" \
