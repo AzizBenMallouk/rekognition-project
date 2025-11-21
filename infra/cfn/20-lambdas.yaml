@@ -154,7 +154,6 @@ Resources:
         S3Key: !Ref IndexFaceKey
       Environment:
         Variables:
-          AWS_REGION: !Ref "AWS::Region"
           COLLECTION_ID: !Ref CollectionId
           TABLE_NAME: "uploads"
           DB_HOST: !Ref DbHost
@@ -188,7 +187,6 @@ Resources:
         S3Key: !Ref SearchFaceKey
       Environment:
         Variables:
-          AWS_REGION: !Ref "AWS::Region"
           COLLECTION_ID: !Ref CollectionId
           TABLE_NAME: "uploads"
           UI_NOTIFY_URL: !Ref UiNotifyUrl

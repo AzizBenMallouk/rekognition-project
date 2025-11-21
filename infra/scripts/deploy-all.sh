@@ -29,7 +29,7 @@ COLLECTION_ID="${COLLECTION_ID:-${PROJECT_NAME}-${ENVIRONMENT}-faces}"
 
 GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${BRANCH_NAME:-main}"
-EC2_KEYPAIR_NAME="${EC2_KEYPAIR_NAME:-brief1-db-key.pem}"
+EC2_KEYPAIR_NAME="${EC2_KEYPAIR_NAME:-brief1-db-key}"
 
 export AWS_REGION="$REGION"
 
