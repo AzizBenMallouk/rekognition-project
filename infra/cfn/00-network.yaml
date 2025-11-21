@@ -181,10 +181,17 @@ Resources:
       GroupDescription: Allow MySQL/MariaDB access from Lambdas
       VpcId: !Ref VPC
       SecurityGroupIngress:
+        # Lambdas -> DB
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+        # SSH depuis l'EC2 upload-web (bastion)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref WebSecurityGroup
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-db-sg"

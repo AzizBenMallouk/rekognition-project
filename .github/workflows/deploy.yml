@@ -1,0 +1,91 @@
+name: Deploy Rekognition Project
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_NAME: rekognition-project
+      ENVIRONMENT: prod
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf "Host *\n  StrictHostKeyChecking no\n" > ~/.ssh/config
+
+      - name: Deploy infra (CloudFormation)
+        run: |
+          chmod +x infra/scripts/deploy-all.sh
+          ./infra/scripts/deploy-all.sh
+
+      - name: Get EC2 IPs from CloudFormation
+        id: get_ips
+        run: |
+          STACK_UPLOAD="${PROJECT_NAME}-upload-web-${ENVIRONMENT}"
+          STACK_SEARCH="${PROJECT_NAME}-search-web-${ENVIRONMENT}"
+          STACK_DB="${PROJECT_NAME}-database-${ENVIRONMENT}"
+
+          UPLOAD_IP=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_UPLOAD" \
+            --query "Stacks[0].Outputs[?OutputKey=='UploadWebPublicIP'].OutputValue" \
+            --output text)
+
+          SEARCH_IP=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_SEARCH" \
+            --query "Stacks[0].Outputs[?OutputKey=='SearchWebPublicIP'].OutputValue" \
+            --output text)
+
+          DB_PRIV_IP=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_DB" \
+            --query "Stacks[0].Outputs[?OutputKey=='DatabasePrivateIP'].OutputValue" \
+            --output text)
+
+          echo "upload_ip=$UPLOAD_IP" >> $GITHUB_OUTPUT
+          echo "search_ip=$SEARCH_IP" >> $GITHUB_OUTPUT
+          echo "db_priv_ip=$DB_PRIV_IP" >> $GITHUB_OUTPUT
+
+          echo "Upload IP : $UPLOAD_IP"
+          echo "Search IP : $SEARCH_IP"
+          echo "DB Priv IP: $DB_PRIV_IP"
+
+      - name: Provision upload-web
+        run: |
+          chmod +x infra/provision/provision-upload-web.sh
+          ./infra/provision/provision-upload-web.sh "ec2-user@${{ steps.get_ips.outputs.upload_ip }}"
+
+      - name: Provision search-web
+        run: |
+          chmod +x infra/provision/provision-search-web.sh
+          ./infra/provision/provision-search-web.sh "ec2-user@${{ steps.get_ips.outputs.search_ip }}"
+
+      - name: Provision DB via bastion (upload-web)
+        env:
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        run: |
+          chmod +x infra/provision/provision-db.sh
+          ./infra/provision/provision-db.sh \
+            "ec2-user@${{ steps.get_ips.outputs.upload_ip }}" \
+            "ec2-user@${{ steps.get_ips.outputs.db_priv_ip }}" \
+            "${DB_NAME:-rekognition_db}" \
+            "${DB_USER:-appuser}" \
+            "${DB_PASS:-SuperSecret123!}"

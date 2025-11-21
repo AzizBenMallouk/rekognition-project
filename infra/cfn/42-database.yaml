@@ -50,45 +50,6 @@ Resources:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-db"
       # Pas de public IP (PrivateSubnet + pas de MapPublicIpOnLaunch)
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          # Log complet du user-data
-          exec > /var/log/user-data.log 2>&1
-          set -eux
-
-          echo "=== UserData DB started on $(date) ==="
-
-          # MàJ système
-          dnf update -y
-
-          # Installer MariaDB 10.5 (package dispo sur AL2023)
-          dnf install -y mariadb105-server
-
-          systemctl enable mariadb
-          systemctl start mariadb
-
-          echo "=== Configuring MariaDB users & DB ==="
-
-          mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DbPassword}'"
-          mysql -uroot -p'${DbPassword}' -e "CREATE DATABASE IF NOT EXISTS \`${DbName}\`"
-          mysql -uroot -p'${DbPassword}' -e "CREATE USER IF NOT EXISTS '${DbUser}'@'%' IDENTIFIED BY '${DbPassword}'"
-          mysql -uroot -p'${DbPassword}' -e "GRANT ALL PRIVILEGES ON \`${DbName}\`.* TO '${DbUser}'@'%'"
-          mysql -uroot -p'${DbPassword}' -e "FLUSH PRIVILEGES"
-
-          echo "=== Creating uploads table if not exists ==="
-
-          mysql -u'${DbUser}' -p'${DbPassword}' '${DbName}' <<'SQL'
-          CREATE TABLE IF NOT EXISTS uploads(
-            id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            s3_bucket VARCHAR(255) NOT NULL,
-            s3_key TEXT NOT NULL,
-            rekognition_faces JSON NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-          SQL
-
-          echo "=== UserData DB completed on $(date) ==="
 
 Outputs:
   DatabasePrivateIP:
