@@ -23,10 +23,8 @@ sudo systemctl enable nginx
 sudo systemctl start nginx
 
 echo "=== [upload-web] Prepare /var/www ==="
-if [ ! -d /var/www ]; then
-  sudo mkdir -p /var/www
-  sudo chown ec2-user:ec2-user /var/www
-fi
+sudo mkdir -p /var/www
+sudo chown ec2-user:ec2-user /var/www
 
 cd /var/www
 
