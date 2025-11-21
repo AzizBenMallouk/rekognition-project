@@ -49,19 +49,18 @@ Resources:
           #!/bin/bash
           set -eux
 
-          yum update -y
-          yum install -y git
+          # MàJ système
+          dnf update -y
 
-          amazon-linux-extras enable php8.2
-          yum clean metadata
-          yum install -y php php-fpm php-json php-mbstring php-mysqlnd
-          yum install -y nginx
+          # Outils & runtimes
+          dnf install -y git nginx php-cli php-fpm php-json php-mbstring php-mysqlnd curl
 
           systemctl enable php-fpm
           systemctl start php-fpm
           systemctl enable nginx
           systemctl start nginx
 
+          # Déployer l'appli
           mkdir -p /var/www
           cd /var/www
           git clone ${GitRepositoryUrl} rekognition-project
@@ -72,6 +71,7 @@ Resources:
           curl -sS https://getcomposer.org/installer | php
           php composer.phar install --no-dev
 
+          # Config Nginx pour PHP
           cat >/etc/nginx/nginx.conf <<'EOF'
           user nginx;
           worker_processes auto;
@@ -88,6 +88,8 @@ Resources:
 
               server {
                   listen 80;
+                  server_name _;
+
                   root /var/www/rekognition-project/apps/upload-web/public;
                   index index.php index.html;
 
@@ -97,14 +99,17 @@ Resources:
 
                   location ~ \.php$ {
                       fastcgi_pass unix:/run/php-fpm/www.sock;
-                      fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                      fastcgi_index index.php;
                       include fastcgi_params;
+                      fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
                   }
               }
           }
           EOF
 
+          nginx -t
           systemctl restart nginx
+
 
 Outputs:
   UploadWebPublicIP:

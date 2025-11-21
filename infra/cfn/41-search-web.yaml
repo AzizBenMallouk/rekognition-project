@@ -31,7 +31,6 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
-
 Resources:
   SearchWebEC2:
     Type: AWS::EC2::Instance
@@ -48,23 +47,40 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
+          # Log tout le user-data
+          exec > /var/log/user-data.log 2>&1
           set -eux
 
-          yum update -y
-          yum install -y git
+          echo "=== UserData search-web started on $(date) ==="
 
+          # MàJ système
+          dnf update -y
+
+          # Git
+          dnf install -y git
+
+          # Node.js 18 via NodeSource (compatible Amazon Linux)
           curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
-          yum install -y nodejs
+          dnf install -y nodejs
 
+          echo "Node version: $(node -v)"
+          echo "NPM version : $(npm -v)"
+
+          # Déployer l'app
           mkdir -p /var/www
           cd /var/www
-          git clone ${GitRepositoryUrl} rekognition-project
+
+          if [ ! -d rekognition-project ]; then
+            git clone ${GitRepositoryUrl} rekognition-project
+          fi
+
           cd rekognition-project
           git checkout ${BranchName}
 
           cd apps/search-web
           npm install
 
+          # Service systemd pour l'app Node
           cat >/etc/systemd/system/search-web.service <<'EOF'
           [Unit]
           Description=Search Web Node App
@@ -74,6 +90,9 @@ Resources:
           WorkingDirectory=/var/www/rekognition-project/apps/search-web
           ExecStart=/usr/bin/node server.js
           Restart=always
+          RestartSec=5
+          Environment=NODE_ENV=production
+          Environment=PORT=3000
 
           [Install]
           WantedBy=multi-user.target
@@ -83,8 +102,11 @@ Resources:
           systemctl enable search-web
           systemctl start search-web
 
+          echo "=== UserData search-web completed on $(date) ==="
+
 Outputs:
   SearchWebPublicIP:
     Value: !GetAtt SearchWebEC2.PublicIp
+
   SearchWebInstanceId:
     Value: !Ref SearchWebEC2
