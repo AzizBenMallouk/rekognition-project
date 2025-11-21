@@ -62,6 +62,7 @@ Resources:
                 Action:
                   - s3:PutBucketNotificationConfiguration
                   - s3:GetBucketNotificationConfiguration
+                  - s3:PutBucketNotification
                 Resource:
                   - !Sub "arn:aws:s3:::${UploadBucketName}"
                   - !Sub "arn:aws:s3:::${SearchBucketName}"
