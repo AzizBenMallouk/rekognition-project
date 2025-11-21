@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Rekognition project - Lambdas (index & search) + IAM
+Description: Rekognition project - Lambdas (index & search) + Rekognition Collection + IAM
 
 Parameters:
   ProjectName:
@@ -10,50 +10,71 @@ Parameters:
     Type: String
     Default: dev
 
-  # DB config (env vars)
+  # --- DB configuration for Lambdas (no Secrets Manager) ---
   DbHost:
     Type: String
-    Description: MySQL host (RDS endpoint or EC2 IP)
+    Description: MySQL host (RDS endpoint or EC2 private IP)
+
   DbPort:
     Type: Number
     Default: 3306
+
   DbUser:
     Type: String
     NoEcho: true
+
   DbPass:
     Type: String
     NoEcho: true
+
   DbName:
     Type: String
     Default: rekognition_db
 
+  # --- Rekognition collection ---
   CollectionId:
     Type: String
     Default: rekognition-faces
 
+  # --- UI notify URL (Node.js server /lambda-result) ---
   UiNotifyUrl:
     Type: String
-    Description: "URL of Node.js endpoint for Lambda results (e.g. http://your-ec2:3000/lambda-result)"
+    Description: "URL of Node.js endpoint for Lambda results (e.g. http://search-web-ip:3000/lambda-result)"
 
+  # --- Lambda code location (S3 artefacts) ---
   LambdaCodeBucket:
     Type: String
     Description: "S3 bucket where lambda zip files are stored"
+
   IndexFaceKey:
     Type: String
     Default: lambda-index-face.zip
+
   SearchFaceKey:
     Type: String
     Default: lambda-search-face.zip
 
-  # Bucket ARNs (from 10-storage outputs)
+  # --- Bucket ARNs from 10-storage stack ---
   UploadBucketArn:
     Type: String
-    Description: "ARN of upload bucket"
+    Description: "ARN of upload bucket (faces indexing source)"
+
   SearchBucketArn:
     Type: String
-    Description: "ARN of search bucket"
+    Description: "ARN of search bucket (face search images)"
 
 Resources:
+  # ---------------------------
+  # Rekognition Collection
+  # ---------------------------
+  RekognitionCollection:
+    Type: AWS::Rekognition::Collection
+    Properties:
+      CollectionId: !Ref CollectionId
+
+  # ---------------------------
+  # Lambda IAM Role
+  # ---------------------------
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -64,30 +85,52 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+
       ManagedPolicyArns:
+        # Basic logs, etc.
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
       Policies:
-        - PolicyName: RekognitionS3AndLogs
+        - PolicyName: RekognitionAndS3Access
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              # Rekognition on our collection
               - Effect: Allow
                 Action:
                   - rekognition:IndexFaces
                   - rekognition:SearchFacesByImage
+                  - rekognition:DetectFaces
+                  - rekognition:ListFaces
+                  - rekognition:DescribeCollection
+                Resource: !Sub "arn:aws:rekognition:${AWS::Region}:${AWS::AccountId}:collection/${CollectionId}"
+
+              # CreateCollection only once if not existing
+              - Effect: Allow
+                Action:
+                  - rekognition:CreateCollection
                 Resource: "*"
+
+              # Read from both S3 buckets
               - Effect: Allow
                 Action:
                   - s3:GetObject
                 Resource:
                   - !Sub "${UploadBucketArn}/*"
                   - !Sub "${SearchBucketArn}/*"
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
 
+  # ---------------------------
+  # Lambda: index-face
+  # Trigger: S3 upload bucket (configured in 30-s3-events stack)
+  # ---------------------------
   IndexFaceFunction:
     Type: AWS::Lambda::Function
+    DependsOn:
+      - RekognitionCollection
     Properties:
       FunctionName: !Sub "${ProjectName}-${Environment}-index-face"
       Runtime: python3.11
@@ -109,8 +152,14 @@ Resources:
           DB_PASS: !Ref DbPass
           DB_NAME: !Ref DbName
 
+  # ---------------------------
+  # Lambda: search-face
+  # Trigger: S3 search bucket (configured in 30-s3-events stack)
+  # ---------------------------
   SearchFaceFunction:
     Type: AWS::Lambda::Function
+    DependsOn:
+      - RekognitionCollection
     Properties:
       FunctionName: !Sub "${ProjectName}-${Environment}-search-face"
       Runtime: python3.11
@@ -141,3 +190,11 @@ Outputs:
   SearchFaceFunctionArnOut:
     Description: "ARN of search-face Lambda"
     Value: !GetAtt SearchFaceFunction.Arn
+
+  RekognitionCollectionIdOut:
+    Description: "Rekognition collection ID used by the Lambdas"
+    Value: !Ref CollectionId
+
+  RekognitionCollectionArnOut:
+    Description: "ARN of the Rekognition collection"
+    Value: !Sub "arn:aws:rekognition:${AWS::Region}:${AWS::AccountId}:collection/${CollectionId}"

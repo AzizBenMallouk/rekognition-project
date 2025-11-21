@@ -14,7 +14,7 @@ set -euo pipefail
 #   DB_PASS (default: SuperSecret123!)
 #   GIT_REPO_URL (default: ton repo GitHub)
 #   BRANCH_NAME (default: main)
-#   EC2_KEYPAIR_NAME (obligatoire – pas de default réaliste)
+#   EC2_KEYPAIR_NAME (default: brief1-db-key.pem)
 
 PROJECT_NAME="${PROJECT_NAME:-rekognition-project}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
@@ -29,7 +29,7 @@ COLLECTION_ID="${COLLECTION_ID:-${PROJECT_NAME}-${ENVIRONMENT}-faces}"
 
 GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${BRANCH_NAME:-main}"
-EC2_KEYPAIR_NAME="${EC2_KEYPAIR_NAME:-your-keypair-name}"
+EC2_KEYPAIR_NAME="${EC2_KEYPAIR_NAME:-brief1-db-key.pem}"
 
 export AWS_REGION="$REGION"
 

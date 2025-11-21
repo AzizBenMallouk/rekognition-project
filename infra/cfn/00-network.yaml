@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Rekognition Project - Network Layer (VPC, Subnets, SG)
+Description: Rekognition Project - Network Layer (VPC, Subnets, SG, NAT)
 
 Parameters:
   ProjectName:
@@ -37,7 +37,7 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
 
   # ---------------------------
-  # Subnets
+  # Subnets (same AZ)
   # ---------------------------
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -55,13 +55,13 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]   # same AZ as PublicSubnet
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-private-subnet"
 
   # ---------------------------
-  # Route table
+  # Public Route table
   # ---------------------------
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -82,12 +82,50 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
 
   # ---------------------------
+  # NAT Gateway for Private Subnet
+  # ---------------------------
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-nat-gw"
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-private-rt"
+
+  PrivateRouteToNat:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # ---------------------------
   # Security Groups
   # ---------------------------
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP/HTTPS and SSH
+      GroupDescription: Allow HTTP and SSH
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -128,11 +166,10 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 0.0.0.0/0  # ⚠ pour la démo. En prod : restreindre !
+          CidrIp: 0.0.0.0/0   # ⚠ demo only. In prod, restrict to app SGs/VPC.
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-db-sg"
-
 
 Outputs:
   VPCIdOut:
@@ -154,4 +191,3 @@ Outputs:
   DbSecurityGroupIdOut:
     Value: !Ref DbSecurityGroup
     Description: "Security Group for DB EC2"
-
