@@ -1,0 +1,17 @@
+{
+  "name": "rekognition-search-web",
+  "version": "1.0.0",
+  "description": "Face search web app (Node + Socket.io + S3 + Lambda)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1500.0",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.7.5"
+  }
+}
