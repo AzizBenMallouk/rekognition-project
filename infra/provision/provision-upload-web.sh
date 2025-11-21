@@ -42,7 +42,9 @@ cd apps/upload-web
 
 if ! command -v composer >/dev/null 2>&1; then
   php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-  php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+  php composer-setup.php
+  sudo mv composer.phar /usr/local/bin/composer
+  sudo chmod +x /usr/local/bin/composer
 fi
 
 composer install --no-dev --prefer-dist
