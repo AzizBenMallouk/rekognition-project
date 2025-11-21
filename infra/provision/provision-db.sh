@@ -10,7 +10,7 @@ DB_NAME="${3:-rekognition_db}"
 DB_USER="${4:-appuser}"
 DB_PASS="${5:-SuperSecret123!}"
 
-# ⚠️ Hypothèse simple : DB_PASS sans espaces ni guillemets spéciaux
+# ⚠️ DB_PASS sans guillemets chelous de préférence (pas de ' ni " pour simplifier)
 
 ssh -o StrictHostKeyChecking=no -J "$BASTION_HOST" "$DB_HOST" << EOF
 set -eo pipefail
@@ -26,8 +26,8 @@ sudo systemctl start mariadb
 
 echo "=== [db] Configure MariaDB users & DB ==="
 
-# On exécute tout en root via sudo mysql (auth socket)
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_PASS}'"
+# On NE TOUCHE PAS root. On utilise sudo mysql (auth socket) pour tout faire.
+
 sudo mysql -e "CREATE DATABASE IF NOT EXISTS \\\`${DB_NAME}\\\\\`"
 sudo mysql -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}'"
 sudo mysql -e "GRANT ALL PRIVILEGES ON \\\`${DB_NAME}\\\\\`.* TO '${DB_USER}'@'%'"
