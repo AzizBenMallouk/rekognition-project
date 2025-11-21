@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage:
-#   ./infra/provision/provision-search-web.sh ec2-user@PUBLIC_IP
-
 HOST="${1:?Usage: provision-search-web.sh ec2-user@PUBLIC_IP}"
 REPO_URL="${2:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${3:-main}"
@@ -14,8 +11,10 @@ set -eux
 echo "=== [search-web] System update ==="
 sudo dnf update -y
 
-echo "=== [search-web] Install git & Node.js 18 ==="
-sudo dnf install -y git curl
+echo "=== [search-web] Install git ==="
+sudo dnf install -y git
+
+echo "=== [search-web] Install Node.js 18 ==="
 curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
 sudo dnf install -y nodejs
 
