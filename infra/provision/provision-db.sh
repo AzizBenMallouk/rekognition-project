@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Usage:
-#   ./infra/provision/provision-db.sh ec2-user@UPLOAD_PUBLIC_IP ec2-user@DB_PRIVATE_IP DB_NAME DB_USER DB_PASS
+#   ./infra/provision/provision-db.sh ec2-user@UPLOAD_IP ec2-user@DB_PRIV_IP DB_NAME DB_USER DB_PASS
 
 BASTION_HOST="${1:?Usage: provision-db.sh ec2-user@UPLOAD_IP ec2-user@DB_PRIV_IP DB_NAME DB_USER DB_PASS}"
 DB_HOST="${2:?Missing DB host (ec2-user@10.0.x.x)}"
@@ -10,7 +10,7 @@ DB_NAME="${3:-rekognition_db}"
 DB_USER="${4:-appuser}"
 DB_PASS="${5:-SuperSecret123!}"
 
-# On utilise ProxyJump pour ne pas copier la clé privée sur l'EC2
+# On utilise ProxyJump pour ne pas copier la clé privée sur la DB
 ssh -o StrictHostKeyChecking=no -J "$BASTION_HOST" "$DB_HOST" << EOF
 set -eux
 
@@ -24,14 +24,19 @@ sudo systemctl enable mariadb
 sudo systemctl start mariadb
 
 echo "=== [db] Configure MariaDB users & DB ==="
-mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_PASS}'"
-mysql -uroot -p'${DB_PASS}' -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`"
-mysql -uroot -p'${DB_PASS}' -e "CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}'"
-mysql -uroot -p'${DB_PASS}' -e "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%'"
-mysql -uroot -p'${DB_PASS}' -e "FLUSH PRIVILEGES"
+
+# On exécute tout en root via sudo mysql (auth socket)
+sudo mysql <<SQL
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${DB_PASS}';
+CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;
+CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASS}';
+GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
+FLUSH PRIVILEGES;
+SQL
 
 echo "=== [db] Create uploads table if not exists ==="
-mysql -u'${DB_USER}' -p'${DB_PASS}' '${DB_NAME}' <<'SQL'
+
+sudo mysql "${DB_NAME}" <<'SQL'
 CREATE TABLE IF NOT EXISTS uploads(
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   s3_bucket VARCHAR(255) NOT NULL,
