@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Usage:
+#   ./infra/provision/provision-search-web.sh ec2-user@PUBLIC_IP
+
 HOST="${1:?Usage: provision-search-web.sh ec2-user@PUBLIC_IP}"
 REPO_URL="${2:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${3:-main}"
@@ -11,10 +14,9 @@ set -eux
 echo "=== [search-web] System update ==="
 sudo dnf update -y
 
-echo "=== [search-web] Install git ==="
+echo "=== [search-web] Install git & Node.js 18 ==="
 sudo dnf install -y git
 
-echo "=== [search-web] Install Node.js 18 ==="
 curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
 sudo dnf install -y nodejs
 
@@ -22,10 +24,8 @@ node -v
 npm -v
 
 echo "=== [search-web] Prepare /var/www ==="
-if [ ! -d /var/www ]; then
-  sudo mkdir -p /var/www
-  sudo chown ec2-user:ec2-user /var/www
-fi
+sudo mkdir -p /var/www
+sudo chown -R ec2-user:ec2-user /var/www
 
 cd /var/www
 
@@ -34,10 +34,15 @@ if [ ! -d rekognition-project ]; then
 fi
 
 cd rekognition-project
+
+# 🔐 Dire à Git que ce repo est safe pour cet utilisateur
+git config --global --add safe.directory /var/www/rekognition-project
+
 git fetch origin
 git checkout "$BRANCH_NAME"
 git pull origin "$BRANCH_NAME"
 
+echo "=== [search-web] npm install ==="
 cd apps/search-web
 npm install
 
