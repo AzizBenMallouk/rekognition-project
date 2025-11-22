@@ -11,7 +11,7 @@ DB_USER="${4:-appuser}"
 DB_PASS="${5:-StrongPass123!}"
 
 echo "=== [LOCAL] Testing SSH to upload-web (${UPLOAD_WEB}) ==="
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "{UPLOAD_WEB}" "echo '[upload-web] SSH OK'"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${UPLOAD_WEB}" "echo '[upload-web] SSH OK'"
 
 echo "=== [LOCAL] SSH into upload-web and test DB connection ==="
 ssh -o StrictHostKeyChecking=no "${UPLOAD_WEB}" << EOF
