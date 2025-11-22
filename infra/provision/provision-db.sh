@@ -11,17 +11,17 @@ DB_USER="${4:-appuser}"
 DB_PASS="${5:-StrongPass123!}"
 
 echo "=== [LOCAL] Testing SSH to upload-web (${UPLOAD_WEB}) ==="
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "ec2-user@${UPLOAD_WEB}" "echo '[upload-web] SSH OK'"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "{UPLOAD_WEB}" "echo '[upload-web] SSH OK'"
 
 echo "=== [LOCAL] SSH into upload-web and test DB connection ==="
-ssh -o StrictHostKeyChecking=no "ec2-user@${UPLOAD_WEB}" << EOF
+ssh -o StrictHostKeyChecking=no "${UPLOAD_WEB}" << EOF
 set -eo pipefail
 
 echo "=== [upload-web] Testing SSH to DB (${DB_IP}) ==="
-ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "ec2-user@${DB_IP}" "echo '[db] SSH OK'"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${DB_IP}" "echo '[db] SSH OK'"
 
 echo "=== [upload-web] Start provisioning DB ==="
-ssh -o StrictHostKeyChecking=no "ec2-user@${DB_IP}" << INNER
+ssh -o StrictHostKeyChecking=no "${DB_IP}" << INNER
 set -eo pipefail
 
 echo "=== [db] Install MariaDB ==="
