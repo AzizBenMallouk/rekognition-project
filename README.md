@@ -1,5 +1,6 @@
 #  AWS Face Rekognition – Full Architecture & Workflow
 
+
 This repository contains the source code and infrastructure layout for an **AWS Face Rekognition Application** that allows users to:
 
 - Upload a face image  
