@@ -39,6 +39,13 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["GET", "PUT", "HEAD"]
+            AllowedOrigins: ["*"]
+            ExposeHeaders: ["ETag"]
+            MaxAge: 3000
 
   SearchBucket:
     Type: AWS::S3::Bucket
@@ -54,6 +61,13 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["GET", "PUT", "HEAD"]
+            AllowedOrigins: ["*"]
+            ExposeHeaders: ["ETag"]
+            MaxAge: 3000
 
 Outputs:
   UploadBucketNameOut:
