@@ -32,6 +32,36 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
 Resources:
+  # -------------------------------------------------
+  # IAM Role + Instance Profile pour l'EC2 search-web
+  # -------------------------------------------------
+  SearchWebRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Pour la démo : accès complet S3.
+        # En prod, remplace ça par une policy limitée à ton search bucket.
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-search-web-role"
+
+  SearchWebInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SearchWebRole
+
+  # -------------------------------------------------
+  # EC2 Search Web
+  # -------------------------------------------------
   SearchWebEC2:
     Type: AWS::EC2::Instance
     Properties:
@@ -41,6 +71,7 @@ Resources:
       SubnetId: !Ref PublicSubnetId
       SecurityGroupIds:
         - !Ref NodeSecurityGroupId
+      IamInstanceProfile: !Ref SearchWebInstanceProfile   # 👈 IMPORTANT
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-search-web"

@@ -32,6 +32,36 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
 
 Resources:
+  # -------------------------------------------------
+  # IAM Role + Instance Profile pour l'EC2 upload-web
+  # -------------------------------------------------
+  UploadWebRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        # Pour la démo : accès complet S3.
+        # En prod, tu peux remplacer par une policy custom limitée à ton bucket.
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-upload-web-role"
+
+  UploadWebInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref UploadWebRole
+
+  # -------------------------------------------------
+  # EC2 Upload Web
+  # -------------------------------------------------
   UploadWebEC2:
     Type: AWS::EC2::Instance
     Properties:
@@ -41,6 +71,7 @@ Resources:
       SubnetId: !Ref PublicSubnetId
       SecurityGroupIds:
         - !Ref WebSecurityGroupId
+      IamInstanceProfile: !Ref UploadWebInstanceProfile   # 👈 IMPORTANT
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-upload-web"
