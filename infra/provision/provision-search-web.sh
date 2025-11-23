@@ -8,7 +8,7 @@ HOST="${1:?Usage: provision-search-web.sh ec2-user@PUBLIC_IP}"
 REPO_URL="${2:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${3:-main}"
 
-# Ces variables viennent de l'environnement du runner (GitHub Actions)
+# Ces variables seront injectées depuis GitHub Actions
 AWS_REGION_VAR="${AWS_REGION:-us-east-1}"
 SEARCH_BUCKET_VAR="${SEARCH_BUCKET:-}"
 
@@ -39,12 +39,15 @@ fi
 
 cd rekognition-project
 
-# 🔐 Dire à Git que ce repo est safe pour cet utilisateur
+# 🔐 Git safe repo
 git config --global --add safe.directory /var/www/rekognition-project
 
 git fetch origin
 git checkout "$BRANCH_NAME"
 git pull origin "$BRANCH_NAME"
+
+# 🔧 S'assurer que tout appartient à ec2-user
+sudo chown -R ec2-user:ec2-user /var/www/rekognition-project
 
 echo "=== [search-web] npm install ==="
 cd apps/search-web
