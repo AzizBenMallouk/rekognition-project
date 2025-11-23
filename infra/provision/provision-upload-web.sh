@@ -2,17 +2,16 @@
 set -eo pipefail
 
 # Usage:
-#   ./infra/provision/provision-upload-web.sh ec2-user@PUBLIC_IP REPO_URL BRANCH_NAME
+#   ./infra/provision/provision-upload-web.sh ec2-user@PUBLIC_IP [REPO_URL] [BRANCH_NAME]
 
 HOST="${1:?Usage: provision-upload-web.sh ec2-user@PUBLIC_IP}"
 REPO_URL="${2:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${3:-main}"
 
-# Environment variables that will be injected into .env
+# Variables d'environnement injectées depuis le runner (GitHub Actions)
 AWS_REGION_VAR="${AWS_REGION:-us-east-1}"
 UPLOAD_BUCKET_VAR="${UPLOAD_BUCKET:-}"
 UPLOAD_CONTENT_TYPE="image/jpeg"
-
 
 ssh -o StrictHostKeyChecking=no "$HOST" << EOF
 set -eux
@@ -30,7 +29,7 @@ sudo systemctl start nginx
 
 echo "=== [upload-web] Prepare /var/www ==="
 sudo mkdir -p /var/www
-sudo chown ec2-user:ec2-user /var/www
+sudo chown -R ec2-user:ec2-user /var/www
 
 cd /var/www
 
@@ -42,6 +41,9 @@ cd rekognition-project
 git fetch origin
 git checkout "$BRANCH_NAME"
 git pull origin "$BRANCH_NAME"
+
+# S'assurer que tout le projet appartient à ec2-user (au cas où des fichiers ont été créés par root avant)
+sudo chown -R ec2-user:ec2-user /var/www/rekognition-project
 
 echo "=== [upload-web] Composer install ==="
 cd apps/upload-web
@@ -56,14 +58,11 @@ fi
 composer install --no-dev --prefer-dist
 
 echo "=== [upload-web] Creating .env file ==="
-
-
 cat > .env << ENVFILE
 AWS_REGION=${AWS_REGION_VAR}
 S3_BUCKET=${UPLOAD_BUCKET_VAR}
-UPLOAD_CONTENT_TYPE=image/jpeg
+UPLOAD_CONTENT_TYPE=${UPLOAD_CONTENT_TYPE}
 ENVFILE
-
 
 echo "=== [upload-web] .env content ==="
 cat .env
