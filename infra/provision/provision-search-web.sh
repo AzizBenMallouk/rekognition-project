@@ -2,11 +2,15 @@
 set -euo pipefail
 
 # Usage:
-#   ./infra/provision/provision-search-web.sh ec2-user@PUBLIC_IP
+#   ./infra/provision/provision-search-web.sh ec2-user@PUBLIC_IP [REPO_URL] [BRANCH_NAME]
 
 HOST="${1:?Usage: provision-search-web.sh ec2-user@PUBLIC_IP}"
 REPO_URL="${2:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${3:-main}"
+
+# Ces variables viennent de l'environnement du runner (GitHub Actions)
+AWS_REGION_VAR="${AWS_REGION:-us-east-1}"
+SEARCH_BUCKET_VAR="${SEARCH_BUCKET:-}"
 
 ssh -o StrictHostKeyChecking=no "$HOST" << EOF
 set -eux
@@ -45,6 +49,16 @@ git pull origin "$BRANCH_NAME"
 echo "=== [search-web] npm install ==="
 cd apps/search-web
 npm install
+
+echo "=== [search-web] Creating .env ==="
+cat > .env << ENVFILE
+AWS_REGION=${AWS_REGION_VAR}
+SEARCH_BUCKET=${SEARCH_BUCKET_VAR}
+PORT=3000
+ENVFILE
+
+echo "=== [search-web] .env content ==="
+cat .env
 
 echo "=== [search-web] Configure systemd service ==="
 sudo bash -c 'cat >/etc/systemd/system/search-web.service' << "SERVICE"

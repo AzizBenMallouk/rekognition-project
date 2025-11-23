@@ -2,11 +2,17 @@
 set -eo pipefail
 
 # Usage:
-#   ./infra/provision/provision-upload-web.sh ec2-user@PUBLIC_IP
+#   ./infra/provision/provision-upload-web.sh ec2-user@PUBLIC_IP REPO_URL BRANCH_NAME
 
 HOST="${1:?Usage: provision-upload-web.sh ec2-user@PUBLIC_IP}"
 REPO_URL="${2:-https://github.com/AzizBenMallouk/rekognition-project.git}"
 BRANCH_NAME="${3:-main}"
+
+# Environment variables that will be injected into .env
+AWS_REGION_VAR="${AWS_REGION:-us-east-1}"
+UPLOAD_BUCKET_VAR="${UPLOAD_BUCKET:-}"
+UPLOAD_CONTENT_TYPE="image/jpeg"
+
 
 ssh -o StrictHostKeyChecking=no "$HOST" << EOF
 set -eux
@@ -48,6 +54,19 @@ if ! command -v composer >/dev/null 2>&1; then
 fi
 
 composer install --no-dev --prefer-dist
+
+echo "=== [upload-web] Creating .env file ==="
+
+
+cat > .env << ENVFILE
+AWS_REGION=${AWS_REGION_VAR}
+S3_BUCKET=${UPLOAD_BUCKET_VAR}
+UPLOAD_CONTENT_TYPE=image/jpeg
+ENVFILE
+
+
+echo "=== [upload-web] .env content ==="
+cat .env
 
 echo "=== [upload-web] Configure nginx ==="
 sudo bash -c 'cat >/etc/nginx/nginx.conf' << "NGINXCONF"

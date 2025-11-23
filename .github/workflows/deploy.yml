@@ -31,12 +31,13 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           printf "Host *\n  StrictHostKeyChecking no\n" > ~/.ssh/config
 
-#      - name: Deploy infra (CloudFormation)
-#        run: |
-#          chmod +x infra/scripts/deploy-all.sh
-#          chmod +x infra/scripts/deploy-stack.sh
-#          chmod +x infra/scripts/package-lambdas.sh
-#          ./infra/scripts/deploy-all.sh
+      # Optionnel: déploiement infra
+      # - name: Deploy infra (CloudFormation)
+      #   run: |
+      #     chmod +x infra/scripts/deploy-all.sh
+      #     chmod +x infra/scripts/deploy-stack.sh
+      #     chmod +x infra/scripts/package-lambdas.sh
+      #     ./infra/scripts/deploy-all.sh
 
       - name: Get EC2 IPs from CloudFormation
         id: get_ips
@@ -68,12 +69,39 @@ jobs:
           echo "Search IP : $SEARCH_IP"
           echo "DB Priv IP: $DB_PRIV_IP"
 
+      - name: Get S3 bucket names from CloudFormation
+        id: get_buckets
+        run: |
+          STACK_STORAGE="${PROJECT_NAME}-storage-${ENVIRONMENT}"
+
+          UPLOAD_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_STORAGE" \
+            --query "Stacks[0].Outputs[?OutputKey=='UploadBucketName'].OutputValue" \
+            --output text)
+
+          SEARCH_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_STORAGE" \
+            --query "Stacks[0].Outputs[?OutputKey=='SearchBucketName'].OutputValue" \
+            --output text)
+
+          echo "upload_bucket=$UPLOAD_BUCKET" >> $GITHUB_OUTPUT
+          echo "search_bucket=$SEARCH_BUCKET" >> $GITHUB_OUTPUT
+
+          echo "Upload bucket : $UPLOAD_BUCKET"
+          echo "Search bucket : $SEARCH_BUCKET"
+
       - name: Provision upload-web
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          UPLOAD_BUCKET: ${{ steps.get_buckets.outputs.upload_bucket }}
         run: |
           chmod +x infra/provision/provision-upload-web.sh
           ./infra/provision/provision-upload-web.sh "ec2-user@${{ steps.get_ips.outputs.upload_ip }}"
 
       - name: Provision search-web
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SEARCH_BUCKET: ${{ steps.get_buckets.outputs.search_bucket }}
         run: |
           chmod +x infra/provision/provision-search-web.sh
           ./infra/provision/provision-search-web.sh "ec2-user@${{ steps.get_ips.outputs.search_ip }}"
